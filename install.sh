@@ -1165,8 +1165,12 @@ if [ "$DOCKER_OK" = true ]; then
         REPLY="n"
     else
         echo ""
-        echo -e "  ${BLUE}Optional:${NC} Docker sandbox runs Claude CLI inside a container"
-        echo "  for additional security isolation. Requires building a Docker image (~400MB)."
+        echo -e "  ${BLUE}Optional:${NC} Docker sandbox runs Claude CLI inside a container."
+        echo "  This adds complexity and is only needed if you're working on sensitive"
+        echo "  projects that you don't want Claude to have access to — Claude is already"
+        echo "  restricted to the projects folder. Requires building a Docker image (~400MB)."
+        echo ""
+        echo -e "  Most users should say ${GREEN}no${NC}."
         echo ""
         read -p "  Enable Docker sandbox? [y/N] " -n 1 -r
         echo ""
