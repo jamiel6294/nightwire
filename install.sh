@@ -3,7 +3,7 @@
 # nightwire installer
 # Signal + Claude AI Bot
 #
-# Usage: ./install.sh [--skip-signal] [--skip-systemd] [--uninstall] [--restart]
+# Usage: ./install.sh [--skip-signal] [--skip-systemd] [--no-prepackaged] [--uninstall] [--restart]
 #
 
 set -e
@@ -378,6 +378,7 @@ SKIP_SYSTEMD=false
 UNINSTALL=false
 RESTART=false
 QUICK_MODE=false
+NO_PREPACKAGED=false
 PHONE_NUMBER_ARG=""
 
 # Parse arguments
@@ -403,6 +404,10 @@ for arg in "$@"; do
             QUICK_MODE=true
             shift
             ;;
+        --no-prepackaged)
+            NO_PREPACKAGED=true
+            shift
+            ;;
         --phone=*)
             PHONE_NUMBER_ARG="${arg#*=}"
             shift
@@ -411,13 +416,14 @@ for arg in "$@"; do
             echo "Usage: ./install.sh [options]"
             echo ""
             echo "Options:"
-            echo "  --quick          Minimal prompts — uses smart defaults"
-            echo "  --phone=NUMBER   Set phone number (e.g., --phone=+15551234567)"
-            echo "  --skip-signal    Skip Signal pairing (configure later)"
-            echo "  --skip-systemd   Skip service installation"
-            echo "  --uninstall      Remove nightwire service and containers"
-            echo "  --restart        Restart the nightwire service"
-            echo "  --help, -h       Show this help message"
+            echo "  --quick            Minimal prompts — uses smart defaults"
+            echo "  --phone=NUMBER     Set phone number (e.g., --phone=+15551234567)"
+            echo "  --skip-signal      Skip Signal pairing (configure later)"
+            echo "  --skip-systemd     Skip service installation"
+            echo "  --no-prepackaged   Use host-side patching instead of pre-built Docker image"
+            echo "  --uninstall        Remove nightwire service and containers"
+            echo "  --restart          Restart the nightwire service"
+            echo "  --help, -h         Show this help message"
             echo ""
             echo "Quick install: ./install.sh --quick --phone=+15551234567"
             exit 0
@@ -1296,51 +1302,17 @@ SANDBOXEOF
 fi
 
 # -----------------------------------------------------------------------------
-# Pre-packaged Signal Docker Image (recommended for ARM, optional for x86)
+# Pre-packaged Signal Docker Image (default: builds patches into the image)
 # -----------------------------------------------------------------------------
 USE_PREPACKAGED=false
 PREPACKAGED_MARKER="$INSTALL_DIR/.use-prepackaged-signal"
 
 if [ "$DOCKER_OK" = true ] && [ "$SKIP_SIGNAL" = false ]; then
-    ARCH=$(uname -m)
-
-    # Check if already using prepackaged image from a previous install
-    if [ -f "$PREPACKAGED_MARKER" ]; then
-        USE_PREPACKAGED=true
-        echo -e "  ${GREEN}✓${NC} Using pre-packaged Signal image (from previous install)"
-    elif [ "$QUICK_MODE" = true ]; then
-        # In quick mode, use prepackaged on ARM by default
-        if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-            USE_PREPACKAGED=true
-        fi
+    if [ "$NO_PREPACKAGED" = true ]; then
+        echo -e "  ${YELLOW}!${NC} Using host-side patching (--no-prepackaged)"
     else
-        echo ""
-        if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-            echo -e "  ${BLUE}ARM architecture detected.${NC}"
-            echo -e "  ${BLUE}Recommended:${NC} Build a pre-packaged Docker image with all signal-cli"
-            echo "  patches baked in. This is simpler and more reliable on ARM."
-            echo ""
-            echo "    1) Pre-packaged Docker image (recommended for ARM)"
-            echo "    2) Manual host-side patching (classic method)"
-            echo ""
-            read -p "    > " PREPACKAGED_CHOICE
-            echo ""
-            if [ "$PREPACKAGED_CHOICE" != "2" ]; then
-                USE_PREPACKAGED=true
-            fi
-        else
-            echo -e "  ${BLUE}Optional:${NC} Build a pre-packaged Docker image with signal-cli"
-            echo "  patches baked in (no host-side Java or patching required)."
-            echo ""
-            read -p "  Use pre-packaged Signal image? [y/N] " -n 1 -r
-            echo ""
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                USE_PREPACKAGED=true
-            fi
-        fi
-    fi
+        USE_PREPACKAGED=true
 
-    if [ "$USE_PREPACKAGED" = true ]; then
         # Check if image already exists
         if docker image inspect nightwire-signal:latest &>/dev/null; then
             echo -e "  ${GREEN}✓${NC} Pre-packaged image already built (nightwire-signal:latest)"

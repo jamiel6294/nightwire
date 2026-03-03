@@ -5,6 +5,12 @@ All notable changes to nightwire (formerly sidechannel) will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.12] - 2026-03-03
+
+### Changed
+- Installer now defaults to pre-packaged Docker image for signal-cli patches (fixes EOF errors caused by volume mount version mismatch with signal-cli-rest-api)
+- Host-side patching still available via `--no-prepackaged` flag
+
 ## [2.5.11] - 2026-03-02
 
 ### Fixed
