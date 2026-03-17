@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import signal
 from enum import Enum
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple, Awaitable
@@ -305,7 +306,8 @@ class ClaudeRunner:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=_subprocess_env
+                env=_subprocess_env,
+                start_new_session=True,  # Own process group for clean kill
             )
             self._active_processes.add(proc)
 
@@ -318,7 +320,7 @@ class ClaudeRunner:
                     timeout=timeout
                 )
             except asyncio.TimeoutError:
-                proc.kill()
+                self._kill_process_group(proc)
                 await proc.wait()
                 self._active_processes.discard(proc)
                 elapsed = int(asyncio.get_running_loop().time() - start_time)
@@ -382,7 +384,7 @@ class ClaudeRunner:
 
             result = output if output else errors
 
-            return True, result, ErrorCategory.TRANSIENT
+            return True, result, ErrorCategory.PERMANENT
 
         except FileNotFoundError:
             logger.error("claude_not_found")
@@ -396,13 +398,27 @@ class ClaudeRunner:
             logger.error("claude_exception", error=str(e), exc_type=type(e).__name__)
             return False, f"Error running Claude: {str(e)}", ErrorCategory.INFRASTRUCTURE
 
+    @staticmethod
+    def _kill_process_group(proc: asyncio.subprocess.Process):
+        """Kill the entire process group so child processes (SSH, node, etc.) are cleaned up."""
+        try:
+            pgid = os.getpgid(proc.pid)
+            os.killpg(pgid, signal.SIGKILL)
+            logger.info("process_group_killed", pid=proc.pid, pgid=pgid)
+        except (ProcessLookupError, PermissionError):
+            # Process already exited or we can't kill it; fall back to direct kill
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+
     async def cancel(self):
-        """Cancel all running Claude processes."""
+        """Cancel all running Claude processes and their children."""
         procs = list(self._active_processes)
         self._active_processes.clear()
         for proc in procs:
+            self._kill_process_group(proc)
             try:
-                proc.kill()
                 await proc.wait()
             except ProcessLookupError:
                 pass
